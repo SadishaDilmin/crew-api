@@ -242,6 +242,73 @@ async def get_github_repos(user_id: str, page: int = 1, per_page: int = 30):
         }
 
 
+# Code file extensions to include when fetching folder contents
+CODE_EXTENSIONS = {
+    ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs", ".rb", ".php",
+    ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt", ".scala", ".vue", ".svelte",
+    ".html", ".css", ".scss", ".sass", ".less", ".json", ".yaml", ".yml", ".xml",
+    ".sql", ".sh", ".bash", ".zsh", ".ps1", ".dockerfile", ".md", ".txt"
+}
+
+
+@app.get("/auth/github/repos/{user_id}/{owner}/{repo}/folder")
+async def get_folder_contents(user_id: str, owner: str, repo: str, path: str = "", max_files: int = 20):
+    """Get contents of all code files in a folder (non-recursive, single level)."""
+    if user_id not in github_tokens:
+        raise HTTPException(status_code=401, detail="Not authenticated. Please login with GitHub.")
+    
+    access_token = github_tokens[user_id]["access_token"]
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Get directory listing
+        url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+        response = await client.get(
+            url,
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="Failed to fetch folder contents")
+        
+        contents = response.json()
+        
+        if isinstance(contents, dict):
+            raise HTTPException(status_code=400, detail="Path is a file, not a folder")
+        
+        # Filter to code files only
+        code_files = []
+        for item in contents:
+            if item["type"] == "file":
+                ext = "." + item["name"].split(".")[-1].lower() if "." in item["name"] else ""
+                if ext in CODE_EXTENSIONS or item["name"].lower() in {"dockerfile", "makefile", "rakefile", "gemfile"}:
+                    code_files.append(item)
+        
+        # Limit files to prevent huge requests
+        code_files = code_files[:max_files]
+        
+        # Fetch content of each file
+        combined_code = []
+        files_included = []
+        
+        for file_item in code_files:
+            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{file_item['path']}"
+            file_response = await client.get(
+                raw_url,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            
+            if file_response.status_code == 200:
+                combined_code.append(f"// ===== File: {file_item['path']} =====\n{file_response.text}")
+                files_included.append(file_item["path"])
+        
+        return {
+            "content": "\n\n".join(combined_code),
+            "files": files_included,
+            "path": path or "/",
+            "total_files": len(files_included)
+        }
+
+
 @app.get("/auth/github/repos/{user_id}/{owner}/{repo}/contents")
 async def get_repo_contents(user_id: str, owner: str, repo: str, path: str = ""):
     """Get contents of a repository directory."""
