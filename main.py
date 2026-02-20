@@ -41,98 +41,23 @@ def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "CrewAI Dev & QA Automation POC"}
 
-# ==================== LLM Configuration ====================
-
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "minimax")  # minimax, openai, gemini
-
-def get_llm(force_provider: str = None) -> LLM:
-    """Get LLM instance. Uses MiniMax by default, with OpenAI/Gemini fallback."""
-    provider = force_provider or LLM_PROVIDER
-    
-    if provider == "minimax":
-        api_key = os.getenv("MINIMAX_API_KEY")
-        if not api_key:
-            raise ValueError("MINIMAX_API_KEY not set.")
-        model = os.getenv("MINIMAX_MODEL", "minimax/MiniMax-M2.5")
-        # LiteLLM handles MiniMax routing automatically
-        return LLM(
-            model=model,
-            api_key=api_key
-        )
-    elif provider == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not set.")
-        model = os.getenv("OPENAI_MODEL", "gpt-4o")
-        return LLM(model=f"openai/{model}", api_key=api_key)
-    elif provider == "gemini":
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY not set.")
-        model = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
-        return LLM(model=model, api_key=api_key)
-    else:
-        raise ValueError(f"Unknown LLM provider: {provider}")
-
-
-# ==================== API Key Validation ====================
-
-@app.get("/validate-api-key")
-def validate_api_key():
-    """Validate the configured LLM API key."""
-    provider = LLM_PROVIDER
-    
-    try:
-        if provider == "minimax":
-            api_key = os.getenv("MINIMAX_API_KEY")
-            if not api_key:
-                raise HTTPException(status_code=400, detail="MINIMAX_API_KEY not set.")
-            model_name = os.getenv("MINIMAX_MODEL", "minimax/MiniMax-M2.5")
-            # Extract model name without prefix for API call
-            api_model = model_name.replace("minimax/", "")
-            # Test MiniMax API with a simple request
-            response = requests.post(
-                "https://api.minimaxi.chat/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": api_model,
-                    "messages": [{"role": "user", "content": "Hi"}],
-                    "max_tokens": 5
-                },
-                timeout=30
-            )
-            if response.status_code == 200:
-                return {
-                    "valid": True,
-                    "provider": "MiniMax",
-                    "model": model_name,
-                    "message": "MiniMax API key is valid",
-                    "benefits": [
-                        "80% cheaper than GPT-4 for similar quality",
-                        "Optimized for multi-agent workflows",
-                        "Fast response times",
-                        "Great for code review, test generation, bug analysis"
-                    ]
-                }
-            else:
-                raise HTTPException(status_code=401, detail=f"MiniMax API error: {response.text}")
-        else:
-            # Fallback validation for other providers
-            llm = get_llm()
-            return {"valid": True, "provider": provider, "message": "API key configured"}
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Connection error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid API key: {str(e)}")
-
+# ==================== Gemini API Key Validation ====================
 
 @app.get("/validate-gemini-key")
 def validate_gemini_key():
-    """Legacy endpoint - redirects to new validation."""
-    return validate_api_key()
+    """Validate Gemini API key and list available models."""
+    import google.genai as genai
+    
+    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not gemini_key:
+        raise HTTPException(status_code=400, detail="GEMINI_API_KEY (or GOOGLE_API_KEY) is not set.")
+    try:
+        client = genai.Client(api_key=gemini_key)
+        # List available models to check if key is valid
+        models = [m.name for m in client.models.list()]
+        return {"valid": True, "message": "API key is valid", "available_models": models}
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Gemini API key or error: {str(e)}")
 
 # ==================== Input Models ====================
 
@@ -619,7 +544,14 @@ class ProjectInput(BaseModel):
     idea: str
 
 
-# Note: get_llm() is defined at the top of the file after health check
+# ==================== LLM Configuration ====================
+
+def get_llm() -> LLM:
+    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not gemini_key:
+        raise ValueError("Set GEMINI_API_KEY (or GOOGLE_API_KEY) to use Gemini.")
+    model = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
+    return LLM(model=model, api_key=gemini_key)
 
 
 # ==================== Project Analysis Workflow ====================
