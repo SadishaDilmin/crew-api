@@ -54,7 +54,7 @@ def get_llm(force_provider: str = None) -> LLM:
         if not api_key:
             raise ValueError("MINIMAX_API_KEY not set.")
         model = os.getenv("MINIMAX_MODEL", "minimax/MiniMax-M2.5")
-        # LiteLLM handles MiniMax routing automaticall
+        # LiteLLM handles MiniMax routing automatically
         return LLM(
             model=model,
             api_key=api_key
