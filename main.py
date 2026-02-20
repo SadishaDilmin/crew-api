@@ -11,7 +11,8 @@ import secrets
 import httpx
 from urllib.parse import urlencode
 
-load_dotenv()
+ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=ENV_PATH)
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 ALLOWED_ORIGINS = [
