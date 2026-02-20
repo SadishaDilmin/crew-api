@@ -13,12 +13,18 @@ from urllib.parse import urlencode
 
 load_dotenv()
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    FRONTEND_URL,
+]
+
 app = FastAPI(title="CrewAI Dev & QA Automation POC")
 
 # Add CORS middleware for Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=list(dict.fromkeys(ALLOWED_ORIGINS)),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,7 +35,6 @@ app.add_middleware(
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
 GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/auth/github/callback")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # In-memory token storage (use Redis/DB in production)
 github_tokens = {}
