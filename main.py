@@ -41,7 +41,7 @@ def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "CrewAI Dev & QA Automation POC"}
 
-# ==================== LLMConfiguration ====================
+# ==================== LLM Configuration ====================
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "minimax")  # minimax, openai, gemini
 
